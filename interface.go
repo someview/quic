@@ -3,6 +3,8 @@ package quic
 import (
 	"context"
 	"net"
+
+	"github.com/someview/quic/internal/protocol"
 )
 
 type Action uint8
@@ -73,29 +75,44 @@ type Connection interface {
 	ReceiveDatagram(context.Context) ([]byte, error)
 }
 
+type StreamID = protocol.StreamID
+
 type QuicConn interface {
 	Context() any
 	SetContext(any)
-	Close() error
+	// LocalAddr returns the local address.
+	LocalAddr() net.Addr
+	// RemoteAddr returns the address of the peer.
+	RemoteAddr() net.Addr
+	// CloseWithError closes the connection with an error.
+	// The error string will be sent to the peer.
+	CloseWithError(ApplicationErrorCode, string) error
+	// Context returns a context that is cancelled when the connection is closed.
 }
 type Stream interface {
-	Read([]byte)
-	OutBound()
+	// Read([]byte)
+	// OutBound()
 }
 
 // appliction should handle business quicly so this would not block event loop
 type QuicHandler interface {
 	OnOpen(QuicConn) Action
 	OnClose(QuicConn) Action
+
 	OnOpenStream(QuicConn, Stream) Action
 	OnCloseStream(QuicConn, Stream) Action
 	OnTrafficStream(QuicConn, Stream) Action
+
+	OnTrafficDatagram(QuicConn) Action
+
 	OnTick() Action
 	QuicWriter
 }
 
-type AsyncCallback func(c QuicConn, stream Stream, err error)
+type StreamCb func(c QuicConn, stream Stream, err error)
+type DatagramCb func(c QuicConn, err error)
 
 type QuicWriter interface {
-	AsyncWrite(conn QuicConn, stream Stream, payload []byte, cb AsyncCallback)
+	Write(c QuicConn, stream Stream, payload []byte, cb StreamCb)
+	WriteDatagram(c QuicConn, payload []byte, cb DatagramCb)
 }
